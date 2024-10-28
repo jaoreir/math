@@ -67,7 +67,7 @@ def phase_space_trajectory(x0, v0, t_max, xg, g=9.81, dt=0.01):
 
 
 # Create visualization
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))
 
 # System parameters
 xg = 0  # ground level
@@ -80,6 +80,7 @@ initial_conditions = [
     (1.0, 3.0),  # Medium initial velocity
     (1.0, 5.0),  # Higher initial velocity
     (1.0, -2.0),  # Initial downward velocity
+    (0.1, 0.0),
 ]
 
 colors = plt.cm.viridis(np.linspace(0, 1, len(initial_conditions)))
@@ -99,6 +100,8 @@ for (x0, v0), color in zip(initial_conditions, colors):
     bounce_mask = np.abs(x - xg) < 1e-6
     ax2.scatter(x[bounce_mask], v[bounce_mask], color=color, s=50, marker="x")
 
+    ax3.plot(t, v, color=color)
+
 # Formatting
 ax1.set_xlabel("Time")
 ax1.set_ylabel("Position")
@@ -114,11 +117,16 @@ ax2.axvline(x=xg, color="k", linestyle="--", alpha=0.5)
 ax2.set_title("Phase Space")
 
 # Add energy contours
-x_grid = np.linspace(-0.5, 2, 100)
-v_grid = np.linspace(-6, 6, 100)
+x_grid = np.linspace(-2, 4, 100)
+v_grid = np.linspace(-10, 10, 100)
 X, V = np.meshgrid(x_grid, v_grid)
 E = 0.5 * V**2 + g * X  # Energy per unit mass
 ax2.contour(X, V, E, levels=10, alpha=0.2, colors="gray")
+
+ax3.set_xlabel("Time")
+ax3.set_ylabel("Velocity")
+ax3.grid(True)
+ax3.set_title("Velocity vs Time")
 
 plt.tight_layout()
 plt.show()
