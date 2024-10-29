@@ -1,7 +1,65 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 from matplotlib.collections import LineCollection
 from scipy.integrate import solve_ivp
+
+
+# System parameters
+xg = -1  # ground level
+t_max = 2.0
+g = 9.81
+
+t_t = 1.5
+x_t = 0.5
+
+
+def get_bounce_time(x0, v0, xg, g=9.81):
+    # xg = x + vt - 1/2*g*t^2
+    # (-1/2*g)t^2 + v*t + (x - xg) = 0
+    a = -0.5 * g
+    b = v0
+    c = x0 - xg
+
+    determinate = b * b - 4 * a * c
+    if determinate < 0:
+        # No real solution
+        return None
+
+    # Assuming g>0, always take negative root
+    t_b = (-b - math.sqrt(determinate)) / (2 * a)
+    return t_b if t_b > 0 else None
+
+
+def get_bounce_pos(x0, v0, t_t, xg, g=9.81):
+    t_curr = 0
+    pos = x0
+    vel = v0
+
+    while t_curr < t_t:
+        dt = get_bounce_time(pos, vel, xg, g)
+        if dt is None or t_curr + dt > t_t:
+            # No more bounce possible, evaluate final position
+            dt = t_t - t_curr
+            return pos + vel * dt - 0.5 * g * dt * dt
+        else:
+            # Update to bounce event
+            pos = xg
+            vel = v0 - g * dt
+            vel = -vel  # Bounce
+            t_curr += dt
+    # This shouldn't happen
+    print("This shouldn't happen!")
+    return None
+
+
+# Generate multiple trajectories
+initial_conditions = [
+    (1.0, 0.0),  # Start at rest
+    (1.0, 3.0),  # Medium initial velocity
+    (1.0, 5.0),  # Higher initial velocity
+    (1.0, -2.0),  # Initial downward velocity
+]
 
 
 def phase_space_trajectory(x0, v0, t_max, xg, g=9.81, dt=0.01):
@@ -69,19 +127,6 @@ def phase_space_trajectory(x0, v0, t_max, xg, g=9.81, dt=0.01):
 # Create visualization
 fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))
 
-# System parameters
-xg = 0  # ground level
-t_max = 2.0
-g = 9.81
-
-# Generate multiple trajectories
-initial_conditions = [
-    (1.0, 0.0),  # Start at rest
-    (1.0, 3.0),  # Medium initial velocity
-    (1.0, 5.0),  # Higher initial velocity
-    (1.0, -2.0),  # Initial downward velocity
-    (0.1, 0.0),
-]
 
 colors = plt.cm.viridis(np.linspace(0, 1, len(initial_conditions)))
 
@@ -100,7 +145,13 @@ for (x0, v0), color in zip(initial_conditions, colors):
     bounce_mask = np.abs(x - xg) < 1e-6
     ax2.scatter(x[bounce_mask], v[bounce_mask], color=color, s=50, marker="x")
 
+    # Plot v(t)
     ax3.plot(t, v, color=color)
+
+    # Plot estimated bounce position
+    bounce_pos = get_bounce_pos(x0, v0, t_t, xg, g)
+    ax1.scatter(t_t, bounce_pos, color=color, label="x_t")
+
 
 # Formatting
 ax1.set_xlabel("Time")
