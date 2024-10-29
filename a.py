@@ -65,15 +65,9 @@ def get_bounce_pos(x0, v0, t_t, xg, g=9.81):
             t_curr += dt
 
 
-def calc_init_velocity(x0, x_t, t_t, xg, g=9.81, eps=1e-6, max_iter=100):
-    # Initial guess: Try bounce at time t
-    # x0 + v0*t - 1/2*g*t*t = xg
-    # v0 * t = xg - x0 + 1/2gtt
-    # v0 = (xg-x0)/t + 1/2gt
-    t_g = t_t * 0.5
-    v0 = (xg - x0) / t_g + 0.5 * g * t_g
-
-    print(f"starting at {v0}")
+def calc_init_velocity(x0, x_t, t_t, xg, g=9.81, eps=1e-6, max_iter=500):
+    # Initial guess: 0 velo to minimize kinetic energy
+    v0 = 0
     delta = 1e-5
 
     # Newton's method
@@ -82,7 +76,7 @@ def calc_init_velocity(x0, x_t, t_t, xg, g=9.81, eps=1e-6, max_iter=100):
         error = x - x_t
 
         # Found solution
-        if abs(error) < eps:
+        if abs(error) < 1e-3:
             print(f"Found at {v0}, error={error}")
             return v0
 
@@ -168,6 +162,11 @@ fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))
 
 colors = plt.cm.viridis(np.linspace(0, 1, len(initial_conditions)))
 
+# Energy contours
+x_grid = np.linspace(-2, 4, 100)
+v_grid = np.linspace(-10, 10, 100)
+X, V = np.meshgrid(x_grid, v_grid)
+E = 0.5 * V**2 + g * X  # Energy per unit mass
 
 def draw_stuff(x_t, t_t):
     ax1.cla()
@@ -213,11 +212,6 @@ def draw_stuff(x_t, t_t):
     ax2.axvline(x=xg, color="k", linestyle="--", alpha=0.5)
     ax2.set_title("Phase Space")
 
-    # Add energy contours
-    x_grid = np.linspace(-2, 4, 100)
-    v_grid = np.linspace(-10, 10, 100)
-    X, V = np.meshgrid(x_grid, v_grid)
-    E = 0.5 * V**2 + g * X  # Energy per unit mass
     ax2.contour(X, V, E, levels=10, alpha=0.2, colors="gray")
 
     ax3.set_xlabel("Time")
