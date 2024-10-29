@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+from matplotlib.widgets import Slider
 from matplotlib.collections import LineCollection
 from scipy.integrate import solve_ivp
 
@@ -11,7 +12,21 @@ t_max = 2.0
 g = 9.81
 
 t_t = 1.5
-x_t = 0.5
+x_t = 0.8
+
+# Generate multiple trajectories
+initial_conditions = [
+    (0, 0.0),  # Start at rest
+    (0.5, 3.0),  # Medium initial velocity
+    (1, 5.0),  # Higher initial velocity
+    (1.5, -2.0),  # Initial downward velocity
+]
+
+# Position [left, bottom, width, height]
+ax_t_t = plt.axes([0.25, 0.1, 0.65, 0.03])
+t_t_slider = Slider(ax_t_t, "Target Time", 0.0, 2.0, valinit=t_t, valstep=0.01)
+ax_x_t = plt.axes([0.25, 0.5, 0.65, 0.03])
+x_t_slider = Slider(ax_x_t, "Target Pos", xg, 2.0, valinit=x_t, valstep=0.01)
 
 
 def get_bounce_time(x0, v0, xg, g=9.81):
@@ -45,21 +60,44 @@ def get_bounce_pos(x0, v0, t_t, xg, g=9.81):
         else:
             # Update to bounce event
             pos = xg
-            vel = v0 - g * dt
+            vel = vel - g * dt
             vel = -vel  # Bounce
             t_curr += dt
-    # This shouldn't happen
-    print("This shouldn't happen!")
-    return None
 
 
-# Generate multiple trajectories
-initial_conditions = [
-    (1.0, 0.0),  # Start at rest
-    (1.0, 3.0),  # Medium initial velocity
-    (1.0, 5.0),  # Higher initial velocity
-    (1.0, -2.0),  # Initial downward velocity
-]
+def calc_init_velocity(x0, x_t, t_t, xg, g=9.81, eps=1e-6, max_iter=100):
+    # Initial guess: Try bounce at time t
+    # x0 + v0*t - 1/2*g*t*t = xg
+    # v0 * t = xg - x0 + 1/2gtt
+    # v0 = (xg-x0)/t + 1/2gt
+    t_g = t_t * 0.5
+    v0 = (xg - x0) / t_g + 0.5 * g * t_g
+
+    print(f"starting at {v0}")
+    delta = 1e-5
+
+    # Newton's method
+    for _ in range(max_iter):
+        x = get_bounce_pos(x0, v0, t_t, xg, g)
+        error = x - x_t
+
+        # Found solution
+        if abs(error) < eps:
+            print(f"Found at {v0}, error={error}")
+            return v0
+
+        # Calculate derivative around x
+        x_plus = get_bounce_pos(x0, v0 + delta, t_t, xg, g)
+        derivative = (x_plus - x) / delta
+
+        if abs(derivative) < eps:
+            print("Derivative too small to continue!")
+            return 0
+
+        v0 -= error / derivative
+
+    print("max iterations reached without convergence")
+    return 0
 
 
 def phase_space_trajectory(x0, v0, t_max, xg, g=9.81, dt=0.01):
@@ -130,54 +168,74 @@ fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 6))
 
 colors = plt.cm.viridis(np.linspace(0, 1, len(initial_conditions)))
 
-# Plot phase space trajectories
-for (x0, v0), color in zip(initial_conditions, colors):
-    t, x, v = phase_space_trajectory(x0, v0, t_max, xg)
 
-    # Plot x(t)
-    ax1.plot(t, x, color=color, label=f"v₀={v0}")
+def draw_stuff(x_t, t_t):
+    ax1.cla()
+    ax2.cla()
+    ax3.cla()
+    # Plot phase space trajectories
+    for (x0, v0), color in zip(initial_conditions, colors):
+        v0 = calc_init_velocity(x0, x_t, t_t, xg)
 
-    # Plot phase space
-    ax2.plot(x, v, color=color)
-    # Mark initial point
-    ax2.scatter([x0], [v0], color=color, s=100, marker="o")
-    # Mark bounce points
-    bounce_mask = np.abs(x - xg) < 1e-6
-    ax2.scatter(x[bounce_mask], v[bounce_mask], color=color, s=50, marker="x")
+        t, x, v = phase_space_trajectory(x0, v0, t_max, xg)
 
-    # Plot v(t)
-    ax3.plot(t, v, color=color)
+        # Plot x(t)
+        # ax1.plot(t, x, color=color, label=f"v₀={v0}")
+        ax1.plot(t, x, color=color)
 
-    # Plot estimated bounce position
-    bounce_pos = get_bounce_pos(x0, v0, t_t, xg, g)
-    ax1.scatter(t_t, bounce_pos, color=color, label="x_t")
+        # Plot phase space
+        ax2.plot(x, v, color=color)
+        # Mark initial point
+        ax2.scatter([x0], [v0], color=color, s=100, marker="o")
+        # Mark bounce points
+        bounce_mask = np.abs(x - xg) < 1e-6
+        ax2.scatter(x[bounce_mask], v[bounce_mask],
+                    color=color, s=50, marker="x")
+
+        # Plot v(t)
+        ax3.plot(t, v, color=color)
+
+        # Plot estimated bounce position
+        bounce_pos = get_bounce_pos(x0, v0, t_t, xg, g)
+        ax1.scatter(t_t, bounce_pos, color=color)
+
+    # Formatting
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Position")
+    ax1.grid(True)
+    # ax1.legend()
+    ax1.axhline(y=xg, color="k", linestyle="--", alpha=0.5)
+    ax1.set_title("Position vs Time")
+
+    ax2.set_xlabel("Position")
+    ax2.set_ylabel("Velocity")
+    ax2.grid(True)
+    ax2.axvline(x=xg, color="k", linestyle="--", alpha=0.5)
+    ax2.set_title("Phase Space")
+
+    # Add energy contours
+    x_grid = np.linspace(-2, 4, 100)
+    v_grid = np.linspace(-10, 10, 100)
+    X, V = np.meshgrid(x_grid, v_grid)
+    E = 0.5 * V**2 + g * X  # Energy per unit mass
+    ax2.contour(X, V, E, levels=10, alpha=0.2, colors="gray")
+
+    ax3.set_xlabel("Time")
+    ax3.set_ylabel("Velocity")
+    ax3.grid(True)
+    ax3.set_title("Velocity vs Time")
 
 
-# Formatting
-ax1.set_xlabel("Time")
-ax1.set_ylabel("Position")
-ax1.grid(True)
-ax1.legend()
-ax1.axhline(y=xg, color="k", linestyle="--", alpha=0.5)
-ax1.set_title("Position vs Time")
+def update(val):
+    t_t = t_t_slider.val
+    x_t = x_t_slider.val
+    draw_stuff(x_t, t_t)
+    fig.canvas.draw_idle()
 
-ax2.set_xlabel("Position")
-ax2.set_ylabel("Velocity")
-ax2.grid(True)
-ax2.axvline(x=xg, color="k", linestyle="--", alpha=0.5)
-ax2.set_title("Phase Space")
 
-# Add energy contours
-x_grid = np.linspace(-2, 4, 100)
-v_grid = np.linspace(-10, 10, 100)
-X, V = np.meshgrid(x_grid, v_grid)
-E = 0.5 * V**2 + g * X  # Energy per unit mass
-ax2.contour(X, V, E, levels=10, alpha=0.2, colors="gray")
+t_t_slider.on_changed(update)
+x_t_slider.on_changed(update)
 
-ax3.set_xlabel("Time")
-ax3.set_ylabel("Velocity")
-ax3.grid(True)
-ax3.set_title("Velocity vs Time")
-
+update(None)
 plt.tight_layout()
 plt.show()
